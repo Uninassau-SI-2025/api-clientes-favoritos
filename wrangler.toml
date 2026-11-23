@@ -1,0 +1,10 @@
+name = "api-clientes-favoritos"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+account_id = "01541165d62d9b6a1c96df855c4d7a9c"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "api-clientes-favoritos"
+database_id = "6f79e628-33d2-43ed-a57e-8ec6a481b744"
+migrations_dir = "migrations"
