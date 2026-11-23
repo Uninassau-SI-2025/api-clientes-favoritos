@@ -122,6 +122,8 @@ export const openApiDocument = {
           },
           "400": jsonResponse("Nome, e-mail, senha ou JSON inválido.", errorSchema),
           "409": jsonResponse("E-mail já cadastrado.", errorSchema),
+          "413": jsonResponse("Corpo maior que 8 KB.", errorSchema),
+          "415": jsonResponse("O corpo precisa ser application/json.", errorSchema),
         },
       },
       get: {
@@ -164,6 +166,8 @@ export const openApiDocument = {
           "400": jsonResponse("Nenhum campo informado, ou algum campo inválido.", errorSchema),
           "404": jsonResponse("Cliente não encontrado.", errorSchema),
           "409": jsonResponse("E-mail já cadastrado.", errorSchema),
+          "413": jsonResponse("Corpo maior que 8 KB.", errorSchema),
+          "415": jsonResponse("O corpo precisa ser application/json.", errorSchema),
         },
       },
       delete: {
@@ -243,6 +247,8 @@ export const openApiDocument = {
           "400": jsonResponse("ID ou product_id inválido.", errorSchema),
           "404": jsonResponse("Cliente ou produto não encontrado.", errorSchema),
           "409": jsonResponse("Produto já está nos favoritos desse cliente.", errorSchema),
+          "413": jsonResponse("Corpo maior que 8 KB.", errorSchema),
+          "415": jsonResponse("O corpo precisa ser application/json.", errorSchema),
           "502": jsonResponse("Falha ao consultar a Fake Store API.", errorSchema),
         },
       },

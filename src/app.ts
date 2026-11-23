@@ -1,7 +1,8 @@
 import { swaggerUI } from "@hono/swagger-ui";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import type { Database } from "./db";
+import { secureHeaders } from "hono/secure-headers";
+import { isUniqueViolation, type Database } from "./db";
 import { openApiDocument } from "./openapi";
 import {
   HttpError,
@@ -21,7 +22,6 @@ type ClientRow = {
   id: number;
   name: string;
   email: string;
-  password_hash: string;
   created_at: string;
 };
 
@@ -51,7 +51,7 @@ function publicClient(row: ClientRow) {
 }
 
 async function findClient(db: Database, id: number): Promise<ClientRow | null> {
-  return db.prepare("SELECT id, name, email, password_hash, created_at FROM clients WHERE id = ?").bind(id).first<ClientRow>();
+  return db.prepare("SELECT id, name, email, created_at FROM clients WHERE id = ?").bind(id).first<ClientRow>();
 }
 
 async function requireClient(db: Database, id: number): Promise<ClientRow> {
@@ -62,7 +62,10 @@ async function requireClient(db: Database, id: number): Promise<ClientRow> {
 
 async function storeResponse(fetchImpl: typeof fetch, path: string): Promise<Response> {
   try {
-    return await fetchImpl(`${FAKE_STORE}${path}`);
+    return await fetchImpl(`${FAKE_STORE}${path}`, {
+      redirect: "error",
+      signal: AbortSignal.timeout(8_000),
+    });
   } catch {
     throw new HttpError(502, "Falha ao consultar a Fake Store API");
   }
@@ -92,12 +95,22 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
 
   app.use(
     "*",
+    secureHeaders({
+      crossOriginResourcePolicy: "cross-origin",
+    }),
+  );
+  app.use(
+    "*",
     cors({
       origin: "*",
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type"],
     }),
   );
+  app.use("*", async (c, next) => {
+    await next();
+    if (c.req.path.startsWith("/clients")) c.header("Cache-Control", "no-store");
+  });
 
   app.onError((error, c) => {
     if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
@@ -145,10 +158,16 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
 
     const createdAt = new Date().toISOString();
     const passwordHash = await hashPassword(password);
-    const inserted = await db
-      .prepare("INSERT INTO clients (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)")
-      .bind(name, email, passwordHash, createdAt)
-      .run();
+    let inserted;
+    try {
+      inserted = await db
+        .prepare("INSERT INTO clients (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)")
+        .bind(name, email, passwordHash, createdAt)
+        .run();
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new HttpError(409, "E-mail já cadastrado");
+      throw error;
+    }
     const id = inserted.meta?.last_row_id;
     if (!id) throw new Error("Falha ao gravar cliente");
     const client = await requireClient(db, id);
@@ -157,7 +176,7 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
 
   app.get("/clients", async (c) => {
     const rows = await db
-      .prepare("SELECT id, name, email, password_hash, created_at FROM clients ORDER BY id")
+      .prepare("SELECT id, name, email, created_at FROM clients ORDER BY id")
       .all<ClientRow>();
     return c.json((rows.results ?? []).map(publicClient));
   });
@@ -187,12 +206,20 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
         .first();
       if (taken) throw new HttpError(409, "E-mail já cadastrado");
     }
-    const passwordHash = hasPassword ? await hashPassword(parsePassword(body.password)) : current.password_hash;
-
-    await db
-      .prepare("UPDATE clients SET name = ?, email = ?, password_hash = ? WHERE id = ?")
-      .bind(name, email, passwordHash, id)
-      .run();
+    try {
+      if (hasPassword) {
+        const passwordHash = await hashPassword(parsePassword(body.password));
+        await db
+          .prepare("UPDATE clients SET name = ?, email = ?, password_hash = ? WHERE id = ?")
+          .bind(name, email, passwordHash, id)
+          .run();
+      } else {
+        await db.prepare("UPDATE clients SET name = ?, email = ? WHERE id = ?").bind(name, email, id).run();
+      }
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new HttpError(409, "E-mail já cadastrado");
+      throw error;
+    }
     const updated = await requireClient(db, id);
     return c.json(publicClient(updated));
   });
@@ -200,8 +227,10 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
   app.delete("/clients/:id", async (c) => {
     const id = parseRouteId(c.req.param("id"));
     await requireClient(db, id);
-    await db.prepare("DELETE FROM favorites WHERE client_id = ?").bind(id).run();
-    await db.prepare("DELETE FROM clients WHERE id = ?").bind(id).run();
+    await db.batch([
+      db.prepare("DELETE FROM favorites WHERE client_id = ?").bind(id),
+      db.prepare("DELETE FROM clients WHERE id = ?").bind(id),
+    ]);
     return c.body(null, 204);
   });
 
@@ -238,10 +267,16 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
     if (!product) throw new HttpError(404, "Produto não encontrado");
 
     const createdAt = new Date().toISOString();
-    const inserted = await db
-      .prepare("INSERT INTO favorites (client_id, product_id, created_at) VALUES (?, ?, ?)")
-      .bind(clientId, productId, createdAt)
-      .run();
+    let inserted;
+    try {
+      inserted = await db
+        .prepare("INSERT INTO favorites (client_id, product_id, created_at) VALUES (?, ?, ?)")
+        .bind(clientId, productId, createdAt)
+        .run();
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new HttpError(409, "Produto já está nos favoritos");
+      throw error;
+    }
     const favoriteId = inserted.meta?.last_row_id;
     if (!favoriteId) throw new Error("Falha ao gravar favorito");
     const favorite = await db

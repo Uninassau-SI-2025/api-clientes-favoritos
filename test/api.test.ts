@@ -101,6 +101,43 @@ describe("API de clientes e favoritos", () => {
     expect(first.id).not.toBe(second.id);
   });
 
+  it("protege os dados pessoais e recusa um corpo inadequado", async () => {
+    const created = await postClient();
+    expect(created.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(created.headers.get("cache-control")).toBe("no-store");
+
+    const withoutType = await app.request("/clients", {
+      method: "POST",
+      body: JSON.stringify({ name: "Amanda Moreira", email: "amanda@exemplo.com", password: "senha123" }),
+    });
+    expect(withoutType.status).toBe(415);
+    expect((await bodyOf(withoutType)).error).toBe("Envie o corpo como application/json");
+
+    const huge = await app.request("/clients", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "A".repeat(9000), email: "grande@exemplo.com", password: "senha123" }),
+    });
+    expect(huge.status).toBe(413);
+    expect((await bodyOf(huge)).error).toBe("Corpo da requisição excede o limite");
+
+    const longEmail = await postClient({ email: `${"a".repeat(250)}@exemplo.com` });
+    expect(longEmail.status).toBe(400);
+    expect((await bodyOf(longEmail)).error).toBe("E-mail inválido");
+  });
+
+  it("desfaz o lote de escrita quando uma instrução falha", async () => {
+    const client = await bodyOf(await postClient());
+    await expect(
+      db.batch([
+        db.prepare("UPDATE clients SET name = ? WHERE id = ?").bind("Nome temporario", client.id),
+        db.prepare("DELETE FROM tabela_inexistente").bind(),
+      ]),
+    ).rejects.toThrow();
+    const stored = await db.prepare("SELECT name FROM clients WHERE id = ?").bind(client.id).first<{ name: string }>();
+    expect(stored?.name).toBe("Ronicarlos Vieira");
+  });
+
   it("recusa cadastro inválido", async () => {
     const missingName = await bodyOf(await postClient({ name: " " }));
     expect((await postClient({ name: " " })).status).toBe(400);

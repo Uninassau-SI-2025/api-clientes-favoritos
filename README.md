@@ -34,6 +34,8 @@ Os nomes e as matrículas estão nos outros trabalhos da organização [Uninassa
 
 A senha usa PBKDF2-SHA-256 com sal aleatório de 16 bytes e 5000 iterações (`pbkdf2-sha256$5000$...`). O plano gratuito dos Workers limita a CPU a 10 ms por requisição, então a contagem de iterações fica abaixo da recomendação geral do PBKDF2 e ainda impede senha em texto puro.
 
+As consultas de cliente não leem `password_hash`. Cadastro e atualização só aceitam `Content-Type: application/json`, com corpo de até 8 KB. E-mail duplicado e favorito repetido também são barrados pela restrição `UNIQUE` do banco. A exclusão do cliente e dos favoritos vai no mesmo lote. Respostas de `/clients` saem com `Cache-Control: no-store`. A chamada à Fake Store tem limite de 8 segundos e não segue redirecionamento.
+
 ## Banco de dados
 
 Duas tabelas, em `migrations/0001_init.sql`:

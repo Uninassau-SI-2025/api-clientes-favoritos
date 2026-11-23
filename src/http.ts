@@ -1,6 +1,8 @@
+const MAX_JSON_BYTES = 8 * 1024;
+
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 404 | 409 | 502,
+    readonly status: 400 | 404 | 409 | 413 | 415 | 502,
     message: string,
   ) {
     super(message);
@@ -10,8 +12,23 @@ export class HttpError extends Error {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function readJson(request: Request): Promise<unknown> {
+  const type = request.headers.get("content-type") ?? "";
+  if (!type.toLowerCase().includes("application/json")) {
+    throw new HttpError(415, "Envie o corpo como application/json");
+  }
+
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BYTES) {
+    throw new HttpError(413, "Corpo da requisição excede o limite");
+  }
+
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_JSON_BYTES) {
+    throw new HttpError(413, "Corpo da requisição excede o limite");
+  }
+
   try {
-    return await request.json();
+    return JSON.parse(text) as unknown;
   } catch {
     throw new HttpError(400, "JSON inválido");
   }
@@ -37,7 +54,7 @@ export function parseName(value: unknown): string {
 export function parseEmail(value: unknown): string {
   if (typeof value !== "string") throw new HttpError(400, "E-mail inválido");
   const email = value.trim().toLowerCase();
-  if (!EMAIL.test(email)) throw new HttpError(400, "E-mail inválido");
+  if (email.length > 254 || !EMAIL.test(email)) throw new HttpError(400, "E-mail inválido");
   return email;
 }
 

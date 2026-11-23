@@ -52,6 +52,16 @@ export function createTestDatabase(): TestDatabase {
     prepare(sql: string) {
       return new SqliteStatement(sqlite, sql);
     },
+    async batch(statements) {
+      sqlite.exec("BEGIN");
+      try {
+        for (const statement of statements) await statement.run();
+        sqlite.exec("COMMIT");
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
+    },
     async reset() {
       sqlite.exec("DELETE FROM favorites; DELETE FROM clients;");
     },
