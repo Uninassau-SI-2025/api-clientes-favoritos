@@ -293,6 +293,32 @@ describe("API de clientes e favoritos", () => {
     expect((await bodyOf(loaded)).email).toBe("roni@exemplo.com");
   });
 
+  it("publica a documentação Swagger", async () => {
+    const spec = await app.request("/openapi.json");
+    expect(spec.status).toBe(200);
+    const document = await bodyOf(spec);
+    expect(document.openapi).toMatch(/^3\./);
+    expect(document.info.title).toBe("API de Clientes e Favoritos");
+    expect(document.paths["/clients"].post).toBeTruthy();
+    expect(document.paths["/clients"].get).toBeTruthy();
+    expect(document.paths["/clients/{id}"].get).toBeTruthy();
+    expect(document.paths["/clients/{id}"].put).toBeTruthy();
+    expect(document.paths["/clients/{id}"].delete).toBeTruthy();
+    expect(document.paths["/products"].get).toBeTruthy();
+    expect(document.paths["/products/{id}"].get).toBeTruthy();
+    expect(document.paths["/categories"].get).toBeTruthy();
+    expect(document.paths["/clients/{id}/favorites"].post).toBeTruthy();
+    expect(document.paths["/clients/{id}/favorites"].get).toBeTruthy();
+    expect(document.paths["/clients/{id}/favorites/{productId}"].delete).toBeTruthy();
+
+    const docs = await app.request("/docs");
+    expect(docs.status).toBe(200);
+    expect(docs.headers.get("content-type")).toContain("text/html");
+    const html = await docs.text();
+    expect(html.toLowerCase()).toContain("swagger");
+    expect(html).toContain("/openapi.json");
+  });
+
   it("responde a raiz e libera CORS", async () => {
     const root = await app.request("/");
     expect(root.status).toBe(200);

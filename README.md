@@ -6,6 +6,8 @@ A API roda em Cloudflare Workers, grava os dados no Cloudflare D1 e está public
 
 https://api-clientes-favoritos.roni0028.workers.dev
 
+Documentação interativa (Swagger): https://api-clientes-favoritos.roni0028.workers.dev/docs
+
 ## Equipe
 
 - Ronicarlos Vieira Cruz Ferreira — matrícula 37012676
@@ -28,6 +30,7 @@ Os nomes e as matrículas estão nos outros trabalhos da organização [Uninassa
 - Wrangler
 - Fake Store API, via `fetch`
 - Vitest
+- Swagger UI em `/docs`, com a especificação OpenAPI em `/openapi.json`
 
 A senha usa PBKDF2-SHA-256 com sal aleatório de 16 bytes e 5000 iterações (`pbkdf2-sha256$5000$...`). O plano gratuito dos Workers limita a CPU a 10 ms por requisição, então a contagem de iterações fica abaixo da recomendação geral do PBKDF2 e ainda impede senha em texto puro.
 
@@ -43,7 +46,7 @@ Um cliente tem vários favoritos. O par `client_id` + `product_id` é único. `p
 
 ## Endpoints
 
-A raiz `GET /` devolve o nome da API e esta lista. Erros vêm como `{ "error": "mensagem" }`.
+A raiz `GET /` devolve o nome da API e esta lista. O Swagger fica em `GET /docs` e o arquivo OpenAPI em `GET /openapi.json`. Erros vêm como `{ "error": "mensagem" }`.
 
 ### Clientes
 

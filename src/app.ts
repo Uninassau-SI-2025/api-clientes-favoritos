@@ -1,6 +1,8 @@
+import { swaggerUI } from "@hono/swagger-ui";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Database } from "./db";
+import { openApiDocument } from "./openapi";
 import {
   HttpError,
   asObject,
@@ -110,7 +112,11 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
         "Ronicarlos Vieira Cruz Ferreira — 37012676",
         "Amanda Moreira de Sá — 37024276",
       ],
+      docs: "/docs",
+      openapi: "/openapi.json",
       endpoints: [
+        "GET /docs",
+        "GET /openapi.json",
         "POST /clients",
         "GET /clients",
         "GET /clients/:id",
@@ -125,6 +131,9 @@ export function createApp(db: Database, fetchImpl: typeof fetch = fetch) {
       ],
     }),
   );
+
+  app.get("/openapi.json", (c) => c.json(openApiDocument));
+  app.get("/docs", swaggerUI({ url: "/openapi.json", title: "API de Clientes e Favoritos" }));
 
   app.post("/clients", async (c) => {
     const body = asObject(await readJson(c.req.raw));
